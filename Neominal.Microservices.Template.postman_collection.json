@@ -1,0 +1,299 @@
+{
+  "info": {
+    "name": "Neominal Microservices Template - Demo Senaryolari",
+    "description": "Modul 1 (.NET Microservices Mastery) uygulama sablonundaki tum /demo endpoint'lerini test etmek icin hazirlanmis koleksiyon. Varsayilan olarak uygulamaya dogrudan (http://localhost:8080) baglanir; nginx reverse proxy uzerinden test etmek icin 'baseUrl' degiskenini 'http://localhost:8090' olarak degistirin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "cacheKey", "value": "kullanici-42", "type": "string" },
+    { "key": "vaultPath", "value": "demo-app", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0 - Genel",
+      "item": [
+        {
+          "name": "Servis Bilgisi (Ana Sayfa)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] },
+            "description": "Uygulamanin ayakta oldugunu ve mevcut senaryo listesini dondurur. Gonderilecek bir deger yok."
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "Postgres ve Redis baglantilarinin saglik durumunu kontrol eder. Gonderilecek bir deger yok. Beklenen cevap: 'Healthy' metni, HTTP 200."
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/metrics", "host": ["{{baseUrl}}"], "path": ["metrics"] },
+            "description": "Prometheus'un scrape ettigi ham metrik ciktisini dondurur (text/plain formatinda). Gonderilecek bir deger yok."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - PostgreSQL",
+      "item": [
+        {
+          "name": "Urun Ekle (Gecerli)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/db/products", "host": ["{{baseUrl}}"], "path": ["demo", "db", "products"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mekanik Klavye\",\n  \"price\": 149.90\n}"
+            },
+            "description": "Body alanlari:\n- name (string, zorunlu, max 100 karakter, bos olamaz)\n- price (decimal, zorunlu, 0'dan buyuk olmali)\n\nBasarili istek HTTP 201 Created ile olusturulan urunu dondurur."
+          }
+        },
+        {
+          "name": "Urun Ekle (Gecersiz - Validasyon Testi)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/db/products", "host": ["{{baseUrl}}"], "path": ["demo", "db", "products"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"price\": -5\n}"
+            },
+            "description": "Kasitli olarak gecersiz veri gonderir (bos isim, negatif fiyat). FluentValidation kurallarini tetikler; HTTP 400 ile ValidationProblem detaylari doner."
+          }
+        },
+        {
+          "name": "Urunleri Listele",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/demo/db/products", "host": ["{{baseUrl}}"], "path": ["demo", "db", "products"] },
+            "description": "Son 20 urunu (en yeniden en eskiye) listeler. Gonderilecek bir deger yok."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Global Exception Handling",
+      "item": [
+        {
+          "name": "Hata: Not Found",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/errors/not-found",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "errors", "not-found"]
+            },
+            "description": "type = 'not-found' -> KeyNotFoundException firlatilir -> HTTP 404 + ProblemDetails.\nDiger gecerli degerler: 'unauthorized', 'bad-request', ya da tanimsiz herhangi bir deger (-> HTTP 500)."
+          }
+        },
+        {
+          "name": "Hata: Unauthorized",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/errors/unauthorized",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "errors", "unauthorized"]
+            },
+            "description": "type = 'unauthorized' -> UnauthorizedAccessException firlatilir -> HTTP 401 + ProblemDetails."
+          }
+        },
+        {
+          "name": "Hata: Bad Request",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/errors/bad-request",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "errors", "bad-request"]
+            },
+            "description": "type = 'bad-request' -> ArgumentException firlatilir -> HTTP 400 + ProblemDetails."
+          }
+        },
+        {
+          "name": "Hata: Bilinmeyen Tip (500)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/errors/unknown",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "errors", "unknown"]
+            },
+            "description": "Taninmayan bir 'type' degeri (ornekte 'unknown') -> InvalidOperationException firlatilir -> HTTP 500 + ProblemDetails. {type} yerine istediginiz herhangi bir metni yazabilirsiniz."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Redis Cache",
+      "item": [
+        {
+          "name": "Cache Oku/Yaz (Cache-Aside)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/cache/:key",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "cache", ":key"],
+              "variable": [
+                { "key": "key", "value": "{{cacheKey}}", "description": "Redis'te aranacak/yazilacak anahtar. Ornek: kullanici-42, sepet-17, oturum-abc" }
+              ]
+            },
+            "description": "Ilk cagrida key Redis'te yoksa uretip 1 dakikalik TTL ile yazar (response: source=generated). Ayni key ile ikinci cagrida Redis'ten okur (response: source=redis-cache). 'key' degerini istediginiz herhangi bir string ile degistirebilirsiniz, ozel bir format gerekmez."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - Kafka",
+      "item": [
+        {
+          "name": "Mesaj Yayinla (Publish)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/kafka/publish", "host": ["{{baseUrl}}"], "path": ["demo", "kafka", "publish"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Merhaba Kafka!\"\n}"
+            },
+            "description": "Body alani:\n- message (string, zorunlu) -> 'demo-events' topic'ine gonderilecek serbest metin.\n\nBasarili istek HTTP 202 Accepted doner. Mesaji Kafka UI'da (http://localhost:8082) veya asagidaki 'Tuketilen Mesajlari Listele' istegiyle gorebilirsiniz (birkac saniye icinde consumer tarafindan islenir)."
+          }
+        },
+        {
+          "name": "Tuketilen Mesajlari Listele",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/demo/kafka/messages", "host": ["{{baseUrl}}"], "path": ["demo", "kafka", "messages"] },
+            "description": "Background consumer'in su ana kadar tukettigi son 50 mesaji dondurur. Gonderilecek bir deger yok; once 'Mesaj Yayinla' istegini calistirin, birkac saniye bekleyip bu istegi tekrar deneyin."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - HashiCorp Vault",
+      "item": [
+        {
+          "name": "Secret Yaz",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/demo/vault/secret/:path",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "vault", "secret", ":path"],
+              "variable": [
+                { "key": "path", "value": "{{vaultPath}}", "description": "Vault'ta secret'in yazilacagi yol (KV v2, mount point: secret/). Ornek: demo-app, uygulama-config" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ConnectionStrings__ExternalApi\": \"https://example.com\",\n  \"ApiKey\": \"s3cr3t-demo-key\"\n}"
+            },
+            "description": "Body: key-value seklinde istediginiz sayida alan (Dictionary<string, object>). Ayni 'path' uzerine tekrar yazarsaniz mevcut secret'in TUM alanlari yeni body ile degistirilir (partial update degildir).\n\nAlternatif olarak container icinden CLI ile de yazilabilir:\ndocker exec -it neominal-vault vault kv put secret/demo-app ApiKey=s3cr3t-demo-key"
+          }
+        },
+        {
+          "name": "Secret Oku",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/demo/vault/secret/:path",
+              "host": ["{{baseUrl}}"],
+              "path": ["demo", "vault", "secret", ":path"],
+              "variable": [
+                { "key": "path", "value": "{{vaultPath}}", "description": "Okunacak secret'in yolu. Onceki 'Secret Yaz' isteginde kullandiginiz path ile ayni olmali (varsayilan: demo-app)." }
+              ]
+            },
+            "description": "Belirtilen path'teki secret'in tum key-value ciftlerini dondurur. Secret hic yazilmadiysa HTTP 404 doner (once 'Secret Yaz' istegini calistirin)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - RabbitMQ",
+      "item": [
+        {
+          "name": "Mesaj Yayinla (Publish)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/rabbitmq/publish", "host": ["{{baseUrl}}"], "path": ["demo", "rabbitmq", "publish"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Merhaba RabbitMQ!\"\n}"
+            },
+            "description": "Body alani:\n- message (string, zorunlu) -> 'demo-queue' kuyruguna gonderilecek serbest metin.\n\nBasarili istek HTTP 202 Accepted doner. Mesaji RabbitMQ Management UI'da (http://localhost:15672 -> Queues -> demo-queue) veya asagidaki 'Tuketilen Mesajlari Listele' istegiyle gorebilirsiniz."
+          }
+        },
+        {
+          "name": "Tuketilen Mesajlari Listele",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/demo/rabbitmq/messages", "host": ["{{baseUrl}}"], "path": ["demo", "rabbitmq", "messages"] },
+            "description": "Background consumer'in su ana kadar tukettigi son 50 mesaji dondurur. Gonderilecek bir deger yok; once 'Mesaj Yayinla' istegini calistirin."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Hangfire (Background Jobs)",
+      "item": [
+        {
+          "name": "Fire-and-Forget Job",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/jobs/fire-and-forget", "host": ["{{baseUrl}}"], "path": ["demo", "jobs", "fire-and-forget"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Merhaba Hangfire!\"\n}"
+            },
+            "description": "Body alani:\n- message (string, opsiyonel) -> bos gecilirse varsayilan bir metin kullanilir.\n\nJob aninda Hangfire kuyruguna alinir ve arka planda calisir. Sonucu http://localhost:8080/hangfire adresindeki Dashboard'da (Succeeded sekmesi) veya Seq loglarinda gorebilirsiniz."
+          }
+        },
+        {
+          "name": "Scheduled Job (Gecikmeli)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/jobs/schedule", "host": ["{{baseUrl}}"], "path": ["demo", "jobs", "schedule"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"10 saniye sonra calisacak job\",\n  \"delaySeconds\": 10\n}"
+            },
+            "description": "Body alanlari:\n- message (string, zorunlu)\n- delaySeconds (int, opsiyonel, varsayilan 10) -> job'un ne kadar gecikmeyle calisacagi.\n\nDashboard'da once 'Scheduled', sure dolunca 'Succeeded' sekmesinde gorunur."
+          }
+        },
+        {
+          "name": "Recurring Job Olustur/Guncelle",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/demo/jobs/recurring", "host": ["{{baseUrl}}"], "path": ["demo", "jobs", "recurring"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Her dakika calisan job\",\n  \"cronExpression\": \"*/1 * * * *\"\n}"
+            },
+            "description": "Body alanlari:\n- message (string, zorunlu)\n- cronExpression (string, opsiyonel, varsayilan '*/1 * * * *' yani her dakika) -> standart cron formati.\n\nAyni isimde ('demo-recurring-job') zaten bir recurring job varsa gunceller. Dashboard'un 'Recurring Jobs' sekmesinden gorulebilir/tetiklenebilir."
+          }
+        },
+        {
+          "name": "Recurring Job Kaldir",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/demo/jobs/recurring", "host": ["{{baseUrl}}"], "path": ["demo", "jobs", "recurring"] },
+            "description": "Gonderilecek bir deger yok. 'demo-recurring-job' isimli recurring job'i kaldirir."
+          }
+        }
+      ]
+    }
+  ]
+}

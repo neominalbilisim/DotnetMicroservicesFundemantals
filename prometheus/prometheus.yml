@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "dotnet-app"
+    metrics_path: /metrics
+    static_configs:
+      # dotnet run ile host makinede çalışan uygulama için host.docker.internal kullanılır.
+      # Uygulamayı da container'a alırsanız bu satırı "app:8080" olarak değiştirin (bkz. README - Bölüm 6).
+      - targets: ["host.docker.internal:8080"]
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
